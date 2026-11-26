@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新聞拼圖</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div><h1>新聞拼圖</h1><p>把同一件事的不同報導拼在一起看</p></div>
+    </div>
+    <div class="head-right">
+      <span class="ai-state" id="aiState"></span>
+      <button class="btn" id="settingsBtn" type="button">⚙ 設定</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- 工具列：分類、檢視方式、主要動作 -->
+  <div class="controls">
+    <div class="tabs" id="catTabs" role="tablist" aria-label="新聞分類"></div>
+    <div class="tabs small" role="tablist" aria-label="檢視方式">
+      <button id="tabEvents" role="tab" type="button">事件</button>
+      <button id="tabRaw" role="tab" type="button">原始新聞</button>
+    </div>
+    <label class="toggle"><input type="checkbox" id="onlyFollow"> 只看追蹤</label>
+    <div class="actions">
+      <button class="btn" id="fetchBtn" type="button" title="讓 AI 上網搜尋今天的新聞">🌐 抓今日新聞</button>
+      <button class="btn" id="rssBtn" type="button" title="從 Google 新聞 RSS 免費抓標題，再交給 AI 整理（不用 AI 上網搜尋額度）">📰 免費抓新聞</button>
+      <button class="btn" id="pasteBtn" type="button">貼上新聞</button>
+      <button class="btn" id="aiBtn" type="button">AI 整理</button>
+      <button class="btn primary" id="digestBtn" type="button">📨 今日簡報</button>
+    </div>
+  </div>
+
+  <div class="status" id="status" aria-live="polite"></div>
+
+  <!-- 貼上新聞 -->
+  <section class="paste" id="pastePanel" hidden>
+    <label for="pasteText">貼上你自己找到的新聞</label>
+    <p>每則新聞之間空一行。第一行是標題，可以寫成「媒體｜標題」；第二行以後可以貼內文（選填）。加入後按「AI 整理」，AI 會把它們併進對應的事件。</p>
+    <textarea id="pasteText" placeholder="中央氣象署｜週五冷氣團南下 北部低溫14度&#10;氣象署表示，週五起冷氣團影響，北部及宜蘭低溫約 14 度……&#10;&#10;自由體育｜中華隊公布12強名單"></textarea>
+    <div class="row">
+      <button class="btn" id="pasteCancel" type="button">取消</button>
+      <button class="btn primary" id="pasteAdd" type="button">加入</button>
+    </div>
+  </section>
+
+  <!-- 主畫面：事件列表 / 事件詳情 / 聊天窗口 -->
+  <div class="layout" id="eventsView">
+    <div class="list" id="list"></div>
+    <article class="detail" id="detail"></article>
+    <aside class="chat" id="chat" aria-label="新聞諮詢">
+      <div class="chat-head">
+        <div>
+          <h2>新聞諮詢</h2>
+          <p id="chatCtx">AI 會參考目前整理好的所有新聞</p>
+        </div>
+        <button class="link" id="chatClear" type="button">清空對話</button>
+      </div>
+      <div class="chat-log" id="chatLog"></div>
+      <div class="sugs" id="chatSugs"></div>
+      <form class="chat-form" id="chatForm">
+        <textarea id="chatInput" rows="2" placeholder="問任何跟新聞有關的事，例如：台股大跌對我有影響嗎？" aria-label="輸入訊息"></textarea>
+        <button class="btn primary" id="chatSend" type="submit">送出</button>
+      </form>
+    </aside>
+  </div>
+
+  <div class="raw" id="rawView" hidden></div>
+</main>
+
+<!-- 設定 -->
+<dialog id="settingsDlg">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2>設定</h2><button class="link" value="close" type="submit">關閉</button></div>
+
+    <section class="dlg-sec">
+      <h3>AI 接入（API key）</h3>
+      <div class="field">
+        <label for="provider">AI 提供者</label>
+        <select id="provider">
+          <option value="anthropic">Claude（Anthropic）— 可上網抓新聞</option>
+          <option value="openai">OpenAI（ChatGPT）</option>
+          <option value="gemini">Google Gemini — 可上網抓新聞</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="apiKey">API key</label>
+        <div class="inline">
+          <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="貼上你的 API key">
+          <button class="btn" id="showKey" type="button">顯示</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="model">模型名稱</label>
+        <input id="model" list="modelList" autocomplete="off" spellcheck="false">
+        <datalist id="modelList"></datalist>
+        <small id="modelHint"></small>
+      </div>
+      <label class="toggle"><input type="checkbox" id="remember"> 在這台電腦記住 API key（存在瀏覽器裡）</label>
+      <p class="warn-box">API key 只會從你的瀏覽器直接送到該 AI 公司，不會經過其他伺服器。但它等於你的帳號密碼：不要在公用電腦勾選「記住」，也不要把這個網頁連同金鑰上傳到網路。</p>
+      <div class="inline">
+        <button class="btn" id="testBtn" type="button">測試連線</button>
+        <span id="testResult" class="muted"></span>
+      </div>
+    </section>
+
+    <section class="dlg-sec">
+      <h3>系統提示詞</h3>
+      <p class="muted">這個 App 的每個 AI 功能都只由一段系統提示詞決定。改這裡就能改變 AI 的行為，會自動儲存。</p>
+      <div class="field">
+        <label for="promptSel">功能</label>
+        <select id="promptSel"></select>
+        <small id="promptDesc"></small>
+      </div>
+      <textarea id="promptText" class="prompt-text" spellcheck="false" aria-label="系統提示詞內容"></textarea>
+      <div class="inline">
+        <button class="btn" id="promptReset" type="button">還原這段的預設值</button>
+        <span id="promptState" class="muted"></span>
+      </div>
+    </section>
+  </form>
+</dialog>
+
+<!-- 今日簡報 -->
+<dialog id="digestDlg">
+  <div class="dlg">
+    <div class="dlg-head"><h2>今日新聞簡報</h2><button class="link" id="digestClose" type="button">關閉</button></div>
+    <div class="digest" id="digestBody"></div>
+    <div class="inline wrap-row">
+      <button class="btn" id="digestCopy" type="button">複製文字</button>
+      <button class="btn" id="digestSave" type="button">下載 .md 檔</button>
+      <a class="btn" id="digestMail" href="#">用 Email 寄給自己</a>
+      <button class="btn" id="digestRedo" type="button">重新產生</button>
+      <span id="digestState" class="muted"></span>
+    </div>
+  </div>
+</dialog>
+
+<script src="prompt.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
